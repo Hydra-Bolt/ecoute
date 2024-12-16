@@ -5,11 +5,11 @@ import time
 
 openai.api_key = OPENAI_API_KEY
 
-def generate_response_from_transcript(transcript):
+def generate_response_from_transcript(transcript, resume=None):
     try:
         response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo-0301",
-                messages=[{"role": "system", "content": create_prompt(transcript)}],
+                model="gpt-4o-mini",
+                messages=[{"role": "system", "content": create_prompt(transcript, resume)}],
                 temperature = 0.0
         )
     except Exception as e:
@@ -22,9 +22,10 @@ def generate_response_from_transcript(transcript):
         return ''
     
 class GPTResponder:
-    def __init__(self):
+    def __init__(self, resume_text=None):
         self.response = INITIAL_RESPONSE
         self.response_interval = 2
+        self.resume = resume_text
 
     def respond_to_transcriber(self, transcriber):
         while True:
@@ -33,7 +34,7 @@ class GPTResponder:
 
                 transcriber.transcript_changed_event.clear() 
                 transcript_string = transcriber.get_transcript()
-                response = generate_response_from_transcript(transcript_string)
+                response = generate_response_from_transcript(transcript_string, resume=self.resume)
                 
                 end_time = time.time()  # Measure end time
                 execution_time = end_time - start_time  # Calculate the time it took to execute the function
@@ -46,6 +47,7 @@ class GPTResponder:
                     time.sleep(remaining_time)
             else:
                 time.sleep(0.3)
-
+    def update_cv(self, resume_text):
+        self.resume = resume_text
     def update_response_interval(self, interval):
         self.response_interval = interval
