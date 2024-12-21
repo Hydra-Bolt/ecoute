@@ -35,9 +35,11 @@ def get_job_role():
     return job_role
 
 def upload_cv(responder, resume_label):
+def upload_cv(responder, resume_label):
     file_path = ctk.filedialog.askopenfilename(filetypes=[("PDF files", "*.pdf"), ("Word files", "*.docx")])
     if file_path:
         print(f"File uploaded: {file_path}")
+        resume_label.configure(text=f"Resume: {file_path.split('/')[-1]}")
         resume_label.configure(text=f"Resume: {file_path.split('/')[-1]}")
         if file_path.endswith(".pdf"):
             cv_text = read_pdf(file_path)
@@ -50,8 +52,11 @@ def upload_cv(responder, resume_label):
         job_role = get_job_role()
         if job_role:
             cv_text += f"\n\nJob Description: {job_role}"
+            cv_text += f"\n\nJob Description: {job_role}"
         
         responder.update_cv(cv_text)
+    else:
+        resume_label.configure(text="No resume uploaded")
     else:
         resume_label.configure(text="No resume uploaded")
 

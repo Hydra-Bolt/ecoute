@@ -98,5 +98,6 @@ class GPTResponder:
     def update_cv(self, resume_text):
         self.resume = resume_text
 
+
     def update_response_interval(self, interval):
         self.response_interval = interval
