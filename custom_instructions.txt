@@ -1,0 +1,7 @@
+write code and explain what the algorithm first
+write code in python
+be concise and precise
+use dsa to solve the question
+solve the problem in java
+solve the problem in python
+solve the problem in c++

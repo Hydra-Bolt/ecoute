@@ -80,15 +80,16 @@ def clear_context(transcriber, audio_queue):
     with audio_queue.mutex:
         audio_queue.queue.clear()
 
-def generate_response(transcriber, responder, custom_instructions, generate_response_button, image_label):
-    generate_response_button.configure(text="Generating...", state="disabled")
+def generate_response(transcriber, responder, custom_instructions_menu, generate_response_button, image_label):
+    generate_response_button.configure(text="Generating...")
     text = transcriber.get_transcript()
     query = "\n".join(text.split("\n")[::-1])
     image = image_label.image._light_image if hasattr(image_label, 'image') else None
-    response = responder.generate_response_from_transcript(query, custom_instructions, image)
+    custom_instruction = custom_instructions_menu.get()
+    response = responder.generate_response_from_transcript(query, custom_instruction, image)
     responder.update_response(response)
     responder.gen_now = True
-    generate_response_button.configure(text="Generate Response", state="enabled")
+    generate_response_button.configure(text="Generate Response")
 
 def paste_image(image_label):
     try:
@@ -108,7 +109,12 @@ def clear_image(image_label):
     image_label.configure(image=None, text="No image")
     image_label.image = None
 
-def create_ui_components(root):
+def read_custom_instructions(file_path):
+    with open(file_path, "r") as file:
+        instructions = [line.strip() for line in file.readlines()]
+    return instructions
+
+def create_ui_components(root, custom_instructions):
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("dark-blue")
     root.title("Ecoute")
@@ -161,8 +167,8 @@ def create_ui_components(root):
     control_frame.grid_columnconfigure(2, weight=1)
     control_frame.grid_columnconfigure(3, weight=1)
 
-    custom_instructions_entry = ctk.CTkEntry(control_frame, placeholder_text="Custom Instructions", fg_color='#1a1a1a', text_color='#FFFFFF')
-    custom_instructions_entry.grid(row=0, column=0, columnspan=5, padx=10, pady=10, sticky="nsew")
+    custom_instructions_menu = ctk.CTkOptionMenu(control_frame, values=custom_instructions, fg_color='#323232', text_color='#FFFFFF', bg_color='#1a1a1a')
+    custom_instructions_menu.grid(row=0, column=0, columnspan=5, padx=10, pady=10, sticky="nsew")
 
     resume_label = ctk.CTkLabel(control_frame, text="No resume uploaded", font=("Arial", 12), text_color="#FFFFFF")
     resume_label.grid(row=1, column=0, columnspan=5, padx=10, pady=10, sticky="nsew")
@@ -186,8 +192,7 @@ def create_ui_components(root):
     update_interval_slider.set(2)
     update_interval_slider.grid(row=4, column=0, columnspan=5, padx=10, pady=10, sticky="nsew")
 
-    return transcript_textbox, response_textbox, update_interval_slider, update_interval_slider_label, freeze_button, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_entry, resume_label, image_label
-
+    return transcript_textbox, response_textbox, update_interval_slider, update_interval_slider_label, freeze_button, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_menu, resume_label, image_label
 
 def main():
     try:
@@ -197,7 +202,8 @@ def main():
         return
 
     root = ctk.CTk()
-    transcript_textbox, response_textbox, update_interval_slider, update_interval_slider_label, freeze_button, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_entry, resume_label, image_label = create_ui_components(root)
+    custom_instructions = read_custom_instructions("custom_instructions.txt")
+    transcript_textbox, response_textbox, update_interval_slider, update_interval_slider_label, freeze_button, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_menu, resume_label, image_label = create_ui_components(root, custom_instructions)
 
     audio_queue = queue.Queue()
 
@@ -216,7 +222,7 @@ def main():
     transcribe.daemon = True
     transcribe.start()
 
-    responder = GPTResponder(custom_instructions_input=custom_instructions_entry)
+    responder = GPTResponder(custom_instructions_input=custom_instructions_menu)
     respond = threading.Thread(target=responder.respond_to_transcriber, args=(transcriber,))
     respond.daemon = True
     respond.start()
@@ -237,7 +243,7 @@ def main():
     freeze_button.configure(command=freeze_unfreeze)
     clear_transcript_button.configure(command=lambda: clear_context(transcriber, audio_queue))
     upload_cv_button.configure(command=lambda: upload_cv(responder, resume_label))
-    generate_response_button.configure(command=lambda: generate_response(transcriber, responder, custom_instructions_entry.get(), generate_response_button, image_label))
+    generate_response_button.configure(command=lambda: generate_response(transcriber, responder, custom_instructions_menu, generate_response_button, image_label))
 
     update_interval_slider_label.configure(text=f"Update interval: {update_interval_slider.get()} seconds")
 
