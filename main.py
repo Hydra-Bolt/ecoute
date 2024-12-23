@@ -82,6 +82,10 @@ def clear_context(transcriber, audio_queue):
 
 def generate_response(transcriber, responder, custom_instructions_menu, generate_response_button, image_label):
     generate_response_button.configure(text="Generating...")
+    _gen_res(transcriber, responder, custom_instructions_menu, image_label)
+    generate_response_button.configure(text="Generate Response")
+
+def _gen_res(transcriber, responder, custom_instructions_menu, image_label):
     text = transcriber.get_transcript()
     query = "\n".join(text.split("\n")[::-1])
     image = image_label.image._light_image if hasattr(image_label, 'image') else None
@@ -89,7 +93,6 @@ def generate_response(transcriber, responder, custom_instructions_menu, generate
     response = responder.generate_response_from_transcript(query, custom_instruction, image)
     responder.update_response(response)
     responder.gen_now = True
-    generate_response_button.configure(text="Generate Response")
 
 def paste_image(image_label):
     try:
