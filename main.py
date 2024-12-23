@@ -1,5 +1,6 @@
 import threading
 from AudioTranscriber import AudioTranscriber
+import CTKSeperator
 from GPTResponder import GPTResponder
 import customtkinter as ctk
 import AudioRecorder 
@@ -10,6 +11,7 @@ import TranscriberModels
 import subprocess
 from docx import Document
 import PyPDF2
+from PIL import Image, ImageGrab
 
 def write_in_textbox(textbox, text):
     textbox.delete("0.0", "end")
@@ -78,23 +80,40 @@ def clear_context(transcriber, audio_queue):
     with audio_queue.mutex:
         audio_queue.queue.clear()
 
-def generate_response(transcriber, responder, custom_instructions, generate_response_button):
+def generate_response(transcriber, responder, custom_instructions, generate_response_button, image_label):
     generate_response_button.configure(text="Generating...", state="disabled")
     text = transcriber.get_transcript()
     query = "\n".join(text.split("\n")[::-1])
-    response = responder.generate_response_from_transcript(query, custom_instructions)
+    image = image_label.image._light_image if hasattr(image_label, 'image') else None
+    response = responder.generate_response_from_transcript(query, custom_instructions, image)
     responder.update_response(response)
     responder.gen_now = True
     generate_response_button.configure(text="Generate Response", state="enabled")
 
+def paste_image(image_label):
+    try:
+        image = ImageGrab.grabclipboard()
+        if isinstance(image, Image.Image):
+            image.thumbnail((300, 300))
+            photo = ctk.CTkImage(light_image=image, dark_image=image, size=(300, 300))
+            image_label.configure(image=photo)
+            image_label.image = photo  # Keep a reference to avoid garbage collection
+            image_label.configure(text="")
+        else:
+            image_label.configure(text="No image found in clipboard")
+    except Exception as e:
+        print(f"Error: {e}")
 
+def clear_image(image_label):
+    image_label.configure(image=None, text="No image")
+    image_label.image = None
 
 def create_ui_components(root):
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("dark-blue")
     root.title("Ecoute")
     root.configure(bg='#000000')
-    root.geometry("1280x1024")
+    root.geometry("1600x800")
 
     font_size = 20
 
@@ -103,22 +122,39 @@ def create_ui_components(root):
 
     main_frame.grid_rowconfigure(0, weight=1)
     main_frame.grid_columnconfigure(0, weight=1)
-    main_frame.grid_columnconfigure(1, weight=1)
+    main_frame.grid_columnconfigure(2, weight=1)
+    main_frame.grid_columnconfigure(4, weight=1)
 
-    transcript_frame = ctk.CTkFrame(main_frame, corner_radius=10, fg_color='#1a1a1a',)
+    transcript_frame = ctk.CTkFrame(main_frame, corner_radius=10, fg_color='#1a1a1a')
     transcript_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
 
+    separator1 = CTKSeperator.CTkWindowSeparator(main_frame, orientation="vertical")
+    separator1.grid(row=0, column=1, padx=2, pady=10, sticky="ns")
+
     response_frame = ctk.CTkFrame(main_frame, corner_radius=10, fg_color='#1a1a1a')
-    response_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+    response_frame.grid(row=0, column=2, padx=10, pady=10, sticky="nsew")
+
+    separator2 = CTKSeperator.CTkWindowSeparator(main_frame, orientation="vertical")
+    separator2.grid(row=0, column=3, padx=2, pady=10, sticky="ns")
+
+    image_frame = ctk.CTkFrame(main_frame, corner_radius=10, fg_color='#1a1a1a')
+    image_frame.grid(row=0, column=4, padx=10, pady=10, sticky="nsew")
 
     control_frame = ctk.CTkFrame(main_frame, corner_radius=10, fg_color='#1a1a1a')
-    control_frame.grid(row=1, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
+    control_frame.grid(row=1, column=0, columnspan=5, padx=10, pady=10, sticky="nsew")
 
     transcript_textbox = ctk.CTkTextbox(transcript_frame, font=("Arial", font_size), text_color='#FFFFFF', wrap="word", fg_color='#1a1a1a')
     transcript_textbox.pack(padx=10, pady=10, fill="both", expand=True)
 
     response_textbox = ctk.CTkTextbox(response_frame, font=("Arial", font_size), text_color='#FFFFFF', wrap="word", fg_color='#1a1a1a')
     response_textbox.pack(padx=10, pady=10, fill="both", expand=True)
+
+    image_label = ctk.CTkLabel(image_frame, text="No image", font=("Arial", font_size), text_color='#FFFFFF', fg_color='#1a1a1a')
+    image_label.pack(padx=10, pady=10, fill="both", expand=True)
+    root.bind("<Control-v>", lambda event: paste_image(image_label))
+
+    clear_image_button = ctk.CTkButton(image_frame, text="Clear Image", command=lambda: clear_image(image_label), fg_color='#801414', text_color='#FFFFFF')
+    clear_image_button.pack(padx=10, pady=10)
 
     control_frame.grid_columnconfigure(0, weight=1)
     control_frame.grid_columnconfigure(1, weight=1)
@@ -131,7 +167,7 @@ def create_ui_components(root):
     resume_label = ctk.CTkLabel(control_frame, text="No resume uploaded", font=("Arial", 12), text_color="#FFFFFF")
     resume_label.grid(row=1, column=0, columnspan=5, padx=10, pady=10, sticky="nsew")
 
-    freeze_button = ctk.CTkButton(control_frame, text="Freeze", command=None, fg_color='#801414', text_color='#FFFFFF')
+    freeze_button = ctk.CTkButton(control_frame, text="Unfreeze", command=None, fg_color='#801414', text_color='#FFFFFF')
     freeze_button.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
 
     clear_transcript_button = ctk.CTkButton(control_frame, text="Clear Transcript", command=None, fg_color='#801414', text_color='#FFFFFF')
@@ -150,7 +186,7 @@ def create_ui_components(root):
     update_interval_slider.set(2)
     update_interval_slider.grid(row=4, column=0, columnspan=5, padx=10, pady=10, sticky="nsew")
 
-    return transcript_textbox, response_textbox, update_interval_slider, update_interval_slider_label, freeze_button, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_entry, resume_label
+    return transcript_textbox, response_textbox, update_interval_slider, update_interval_slider_label, freeze_button, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_entry, resume_label, image_label
 
 
 def main():
@@ -161,7 +197,7 @@ def main():
         return
 
     root = ctk.CTk()
-    transcript_textbox, response_textbox, update_interval_slider, update_interval_slider_label, freeze_button, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_entry, resume_label = create_ui_components(root)
+    transcript_textbox, response_textbox, update_interval_slider, update_interval_slider_label, freeze_button, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_entry, resume_label, image_label = create_ui_components(root)
 
     audio_queue = queue.Queue()
 
@@ -190,7 +226,10 @@ def main():
     root.grid_rowconfigure(0, weight=1)
     root.grid_columnconfigure(0, weight=1)
 
-    freeze_state = [False]  # Responses are frozen from the start
+    freeze_state = [True]  # Responses are frozen from the start
+
+    responder.freezed = freeze_state[0]
+    
     def freeze_unfreeze():
         freeze_state[0] = not freeze_state[0]  # Invert the freeze state
         freeze_button.configure(text="Unfreeze" if freeze_state[0] else "Freeze")
@@ -198,7 +237,7 @@ def main():
     freeze_button.configure(command=freeze_unfreeze)
     clear_transcript_button.configure(command=lambda: clear_context(transcriber, audio_queue))
     upload_cv_button.configure(command=lambda: upload_cv(responder, resume_label))
-    generate_response_button.configure(command=lambda: generate_response(transcriber, responder, custom_instructions_entry.get(), generate_response_button))
+    generate_response_button.configure(command=lambda: generate_response(transcriber, responder, custom_instructions_entry.get(), generate_response_button, image_label))
 
     update_interval_slider_label.configure(text=f"Update interval: {update_interval_slider.get()} seconds")
 
