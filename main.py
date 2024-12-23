@@ -60,7 +60,7 @@ def update_transcript_UI(transcriber, textbox):
     write_in_textbox(textbox, transcript_string)
     textbox.after(300, update_transcript_UI, transcriber, textbox)
 
-def update_response_UI(responder, textbox, update_interval_slider_label, update_interval_slider, freeze_state):
+def update_response_UI(responder, textbox, freeze_state):
     if not freeze_state[0] or responder.gen_now:
         response = responder.response
 
@@ -68,12 +68,9 @@ def update_response_UI(responder, textbox, update_interval_slider_label, update_
         write_in_textbox(textbox, response)
         textbox.configure(state="disabled")
 
-        update_interval = int(update_interval_slider.get())
-        responder.update_response_interval(update_interval)
-        update_interval_slider_label.configure(text=f"Update interval: {update_interval} seconds")
         responder.gen_now = False
 
-    textbox.after(300, update_response_UI, responder, textbox, update_interval_slider_label, update_interval_slider, freeze_state)
+    textbox.after(300, update_response_UI, responder, textbox, freeze_state)
 
 def clear_context(transcriber, audio_queue):
     transcriber.clear_transcript_data()
@@ -86,11 +83,16 @@ def generate_response(transcriber, responder, custom_instructions_menu, generate
     generate_response_button.configure(text="Generate Response")
 
 def _gen_res(transcriber, responder, custom_instructions_menu, image_label):
+    if hasattr(image_label, 'image'):
+        image = image_label.image._light_image
+    else:
+        image = None
+
     text = transcriber.get_transcript()
     query = "\n".join(text.split("\n")[::-1])
-    image = image_label.image._light_image if hasattr(image_label, 'image') else None
     custom_instruction = custom_instructions_menu.get()
     response = responder.generate_response_from_transcript(query, custom_instruction, image)
+    
     responder.update_response(response)
     responder.gen_now = True
 
@@ -168,34 +170,23 @@ def create_ui_components(root, custom_instructions):
     control_frame.grid_columnconfigure(0, weight=1)
     control_frame.grid_columnconfigure(1, weight=1)
     control_frame.grid_columnconfigure(2, weight=1)
-    control_frame.grid_columnconfigure(3, weight=1)
 
     custom_instructions_menu = ctk.CTkOptionMenu(control_frame, values=custom_instructions, fg_color='#323232', text_color='#FFFFFF', bg_color='#1a1a1a')
-    custom_instructions_menu.grid(row=0, column=0, columnspan=5, padx=10, pady=10, sticky="nsew")
+    custom_instructions_menu.grid(row=0, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
 
     resume_label = ctk.CTkLabel(control_frame, text="No resume uploaded", font=("Arial", 12), text_color="#FFFFFF")
-    resume_label.grid(row=1, column=0, columnspan=5, padx=10, pady=10, sticky="nsew")
-
-    freeze_button = ctk.CTkButton(control_frame, text="Unfreeze", command=None, fg_color='#801414', text_color='#FFFFFF')
-    freeze_button.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
+    resume_label.grid(row=1, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
 
     clear_transcript_button = ctk.CTkButton(control_frame, text="Clear Transcript", command=None, fg_color='#801414', text_color='#FFFFFF')
-    clear_transcript_button.grid(row=2, column=1, padx=10, pady=10, sticky="nsew")
+    clear_transcript_button.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
 
     upload_cv_button = ctk.CTkButton(control_frame, text="Upload CV", command=None, fg_color='#801414', text_color='#FFFFFF')
-    upload_cv_button.grid(row=2, column=2, padx=10, pady=10, sticky="nsew")
+    upload_cv_button.grid(row=2, column=1, padx=10, pady=10, sticky="nsew")
 
     generate_response_button = ctk.CTkButton(control_frame, text="Generate Response", command=None, fg_color='#801414', text_color='#FFFFFF')
-    generate_response_button.grid(row=2, column=3, padx=10, pady=10, sticky="nsew")
+    generate_response_button.grid(row=2, column=2, padx=10, pady=10, sticky="nsew")
 
-    update_interval_slider_label = ctk.CTkLabel(control_frame, text=f"", font=("Arial", 12), text_color="#FFFFFF")
-    update_interval_slider_label.grid(row=3, column=0, columnspan=5, padx=10, pady=10, sticky="nsew")
-
-    update_interval_slider = ctk.CTkSlider(control_frame, from_=1, to=10, number_of_steps=9, fg_color='#801414', button_color='#323232')
-    update_interval_slider.set(2)
-    update_interval_slider.grid(row=4, column=0, columnspan=5, padx=10, pady=10, sticky="nsew")
-
-    return transcript_textbox, response_textbox, update_interval_slider, update_interval_slider_label, freeze_button, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_menu, resume_label, image_label
+    return transcript_textbox, response_textbox, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_menu, resume_label, image_label
 
 def main():
     try:
@@ -206,7 +197,7 @@ def main():
 
     root = ctk.CTk()
     custom_instructions = read_custom_instructions("custom_instructions.txt")
-    transcript_textbox, response_textbox, update_interval_slider, update_interval_slider_label, freeze_button, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_menu, resume_label, image_label = create_ui_components(root, custom_instructions)
+    transcript_textbox, response_textbox, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_menu, resume_label, image_label = create_ui_components(root, custom_instructions)
 
     audio_queue = queue.Queue()
 
@@ -238,20 +229,13 @@ def main():
     freeze_state = [True]  # Responses are frozen from the start
 
     responder.freezed = freeze_state[0]
-    
-    def freeze_unfreeze():
-        freeze_state[0] = not freeze_state[0]  # Invert the freeze state
-        freeze_button.configure(text="Unfreeze" if freeze_state[0] else "Freeze")
 
-    freeze_button.configure(command=freeze_unfreeze)
     clear_transcript_button.configure(command=lambda: clear_context(transcriber, audio_queue))
     upload_cv_button.configure(command=lambda: upload_cv(responder, resume_label))
     generate_response_button.configure(command=lambda: generate_response(transcriber, responder, custom_instructions_menu, generate_response_button, image_label))
 
-    update_interval_slider_label.configure(text=f"Update interval: {update_interval_slider.get()} seconds")
-
     update_transcript_UI(transcriber, transcript_textbox)
-    update_response_UI(responder, response_textbox, update_interval_slider_label, update_interval_slider, freeze_state)
+    update_response_UI(responder, response_textbox, freeze_state)
 
     root.mainloop()
 
