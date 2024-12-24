@@ -11,7 +11,6 @@ import TranscriberModels
 import subprocess
 from docx import Document
 import PyPDF2
-from PIL import Image, ImageGrab
 
 def write_in_textbox(textbox, text):
     textbox.delete("0.0", "end")
@@ -77,42 +76,19 @@ def clear_context(transcriber, audio_queue):
     with audio_queue.mutex:
         audio_queue.queue.clear()
 
-def generate_response(transcriber, responder, custom_instructions_menu, generate_response_button, image_label):
+def generate_response(transcriber, responder, custom_instructions_menu, generate_response_button):
     generate_response_button.configure(text="Generating...")
-    _gen_res(transcriber, responder, custom_instructions_menu, image_label)
+    _gen_res(transcriber, responder, custom_instructions_menu)
     generate_response_button.configure(text="Generate Response")
 
-def _gen_res(transcriber, responder, custom_instructions_menu, image_label):
-    if hasattr(image_label, 'image'):
-        image = image_label.image._light_image
-    else:
-        image = None
-
+def _gen_res(transcriber, responder, custom_instructions_menu):
     text = transcriber.get_transcript()
     query = "\n".join(text.split("\n")[::-1])
     custom_instruction = custom_instructions_menu.get()
-    response = responder.generate_response_from_transcript(query, custom_instruction, image)
+    response = responder.generate_response_from_transcript(query, custom_instruction)
     
     responder.update_response(response)
     responder.gen_now = True
-
-def paste_image(image_label):
-    try:
-        image = ImageGrab.grabclipboard()
-        if isinstance(image, Image.Image):
-            image.thumbnail((300, 300))
-            photo = ctk.CTkImage(light_image=image, dark_image=image, size=(300, 300))
-            image_label.configure(image=photo)
-            image_label.image = photo  # Keep a reference to avoid garbage collection
-            image_label.configure(text="")
-        else:
-            image_label.configure(text="No image found in clipboard")
-    except Exception as e:
-        print(f"Error: {e}")
-
-def clear_image(image_label):
-    image_label.configure(image=None, text="No image")
-    image_label.image = None
 
 def read_custom_instructions(file_path):
     with open(file_path, "r") as file:
@@ -134,7 +110,6 @@ def create_ui_components(root, custom_instructions):
     main_frame.grid_rowconfigure(0, weight=1)
     main_frame.grid_columnconfigure(0, weight=1)
     main_frame.grid_columnconfigure(2, weight=1)
-    main_frame.grid_columnconfigure(4, weight=1)
 
     transcript_frame = ctk.CTkFrame(main_frame, corner_radius=10, fg_color='#1a1a1a')
     transcript_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
@@ -145,27 +120,14 @@ def create_ui_components(root, custom_instructions):
     response_frame = ctk.CTkFrame(main_frame, corner_radius=10, fg_color='#1a1a1a')
     response_frame.grid(row=0, column=2, padx=10, pady=10, sticky="nsew")
 
-    separator2 = CTKSeperator.CTkWindowSeparator(main_frame, orientation="vertical")
-    separator2.grid(row=0, column=3, padx=2, pady=10, sticky="ns")
-
-    image_frame = ctk.CTkFrame(main_frame, corner_radius=10, fg_color='#1a1a1a')
-    image_frame.grid(row=0, column=4, padx=10, pady=10, sticky="nsew")
-
     control_frame = ctk.CTkFrame(main_frame, corner_radius=10, fg_color='#1a1a1a')
-    control_frame.grid(row=1, column=0, columnspan=5, padx=10, pady=10, sticky="nsew")
+    control_frame.grid(row=1, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
 
     transcript_textbox = ctk.CTkTextbox(transcript_frame, font=("Arial", font_size), text_color='#FFFFFF', wrap="word", fg_color='#1a1a1a')
     transcript_textbox.pack(padx=10, pady=10, fill="both", expand=True)
 
     response_textbox = ctk.CTkTextbox(response_frame, font=("Arial", font_size), text_color='#FFFFFF', wrap="word", fg_color='#1a1a1a')
     response_textbox.pack(padx=10, pady=10, fill="both", expand=True)
-
-    image_label = ctk.CTkLabel(image_frame, text="No image", font=("Arial", font_size), text_color='#FFFFFF', fg_color='#1a1a1a')
-    image_label.pack(padx=10, pady=10, fill="both", expand=True)
-    root.bind("<Control-v>", lambda event: paste_image(image_label))
-
-    clear_image_button = ctk.CTkButton(image_frame, text="Clear Image", command=lambda: clear_image(image_label), fg_color='#801414', text_color='#FFFFFF')
-    clear_image_button.pack(padx=10, pady=10)
 
     control_frame.grid_columnconfigure(0, weight=1)
     control_frame.grid_columnconfigure(1, weight=1)
@@ -186,7 +148,7 @@ def create_ui_components(root, custom_instructions):
     clear_transcript_button = ctk.CTkButton(control_frame, text="Clear Transcript", command=None, fg_color='#801414', text_color='#FFFFFF')
     clear_transcript_button.grid(row=2, column=2, padx=10, pady=10, sticky="nsew")
 
-    return transcript_textbox, response_textbox, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_menu, resume_label, image_label
+    return transcript_textbox, response_textbox, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_menu, resume_label
 
 def main():
     try:
@@ -197,7 +159,7 @@ def main():
 
     root = ctk.CTk()
     custom_instructions = read_custom_instructions("custom_instructions.txt")
-    transcript_textbox, response_textbox, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_menu, resume_label, image_label = create_ui_components(root, custom_instructions)
+    transcript_textbox, response_textbox, clear_transcript_button, upload_cv_button, generate_response_button, custom_instructions_menu, resume_label = create_ui_components(root, custom_instructions)
 
     audio_queue = queue.Queue()
 
@@ -232,7 +194,7 @@ def main():
 
     clear_transcript_button.configure(command=lambda: clear_context(transcriber, audio_queue))
     upload_cv_button.configure(command=lambda: upload_cv(responder, resume_label))
-    generate_response_button.configure(command=lambda: generate_response(transcriber, responder, custom_instructions_menu, generate_response_button, image_label))
+    generate_response_button.configure(command=lambda: generate_response(transcriber, responder, custom_instructions_menu, generate_response_button))
 
     update_transcript_UI(transcriber, transcript_textbox)
     update_response_UI(responder, response_textbox, freeze_state)
